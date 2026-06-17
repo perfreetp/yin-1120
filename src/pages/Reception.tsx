@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
-import { Input, Card, Empty, Button, Tag, message, Divider } from "antd"
+import { Input, Card, Empty, Button, Tag, message, Divider, Modal, Descriptions } from "antd"
 import {
   Search,
   ScanLine,
@@ -9,12 +9,16 @@ import {
   ChevronRight,
   RefreshCw,
   Printer,
+  FileDown,
+  Eye,
+  AlertTriangle,
 } from "lucide-react"
 import { useMatterStore } from "@/stores/useMatterStore"
 import { useLicenseStore } from "@/stores/useLicenseStore"
 import { useAuditStore } from "@/stores/useAuditStore"
 import LicenseCard from "@/components/LicenseCard"
 import type { AuditRecord } from "@/types"
+import { licenses as allLicensesData } from "@/mock/licenses"
 import dayjs from "dayjs"
 
 export default function Reception() {
@@ -34,6 +38,8 @@ export default function Reception() {
 
   const [idInput, setIdInput] = useState("")
   const [idSearchLoading, setIdSearchLoading] = useState(false)
+  const [noticeVisible, setNoticeVisible] = useState(false)
+  const [noticeAction, setNoticeAction] = useState<"print" | "export">("print")
 
   const matters = filteredMatters()
   const categories = [...new Set(matters.map((m) => m.category))]
@@ -61,6 +67,34 @@ export default function Reception() {
       const found = findCitizen(idInput.trim())
       if (found) {
         setCitizen(found)
+        if (selectedMatter) {
+          const rec: AuditRecord = {
+            id: `A${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+            licenseId: "SYSTEM",
+            licenseName: "身份识别",
+            matterId: selectedMatter.id,
+            matterName: selectedMatter.name,
+            windowNo: "窗口1",
+            operatorId: "OP001",
+            operatorName: "王丽娟",
+            citizenId: found.idNumber,
+            citizenName: found.name,
+            callReason: { category: "legal_requirement", description: "群众刷身份证取号识别身份" },
+            verificationResult: {
+              licenseId: "SYSTEM",
+              expiryCheck: "valid",
+              authorityCheck: "consistent",
+              statusCheck: "normal",
+              fieldComparison: [],
+              duplicateWarning: false,
+              missingLicenses: [],
+            },
+            signatureDataUrl: "",
+            action: "scan",
+            createdAt: dayjs().format("YYYY-MM-DD HH:mm:ss"),
+          }
+          addAuditRecord(rec)
+        }
         message.success("查询成功")
       } else {
         setCitizen(null)
@@ -89,22 +123,35 @@ export default function Reception() {
     navigate(`/verify/${licenseId}`)
   }
 
-  const handlePrintNotice = () => {
-    if (!selectedMatter || !citizen) return
-    const record: AuditRecord = {
-      id: `A${Date.now()}`,
-      licenseId: "MULTI",
-      licenseName: "告知单打印",
-      matterId: selectedMatter.id,
-      matterName: selectedMatter.name,
+  const missingLicenseIds = selectedMatter
+    ? selectedMatter.requiredLicenses.filter(
+        (id) => !currentLicenses.find((l) => l.id === id)
+      )
+    : []
+
+  const missingLicenseNames = missingLicenseIds
+    .map((id) => allLicensesData.find((l) => l.id === id)?.name || id)
+    .filter(Boolean)
+
+  const makeNoticeRecord = (action: "print" | "export"): AuditRecord => {
+    const desc = action === "print" ? "打印一次性告知单" : "导出一次性告知单"
+    return {
+      id: `A${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      licenseId: "NOTICE",
+      licenseName: "一次性告知单",
+      matterId: selectedMatter?.id || "",
+      matterName: selectedMatter?.name || "",
       windowNo: "窗口1",
       operatorId: "OP001",
       operatorName: "王丽娟",
-      citizenId: citizen.idNumber,
-      citizenName: citizen.name,
-      callReason: { category: "material_verification", description: "打印一次性告知单" },
+      citizenId: citizen?.idNumber || "",
+      citizenName: citizen?.name || "",
+      callReason: {
+        category: "legal_requirement",
+        description: `${desc}，缺失证照：${missingLicenseNames.join("、") || "无"}`,
+      },
       verificationResult: {
-        licenseId: "MULTI",
+        licenseId: "NOTICE",
         expiryCheck: "valid",
         authorityCheck: "consistent",
         statusCheck: "normal",
@@ -113,18 +160,33 @@ export default function Reception() {
         missingLicenses: missingLicenseIds,
       },
       signatureDataUrl: "",
-      action: "download",
+      action,
       createdAt: dayjs().format("YYYY-MM-DD HH:mm:ss"),
     }
-    addAuditRecord(record)
-    message.info("一次性告知单已发送至打印队列，操作已留痕")
   }
 
-  const missingLicenseIds = selectedMatter
-    ? selectedMatter.requiredLicenses.filter(
-        (id) => !currentLicenses.find((l) => l.id === id)
-      )
-    : []
+  const handlePrintNotice = () => {
+    if (!selectedMatter || !citizen) return
+    setNoticeAction("print")
+    setNoticeVisible(true)
+  }
+
+  const handleExportNotice = () => {
+    if (!selectedMatter || !citizen) return
+    setNoticeAction("export")
+    setNoticeVisible(true)
+  }
+
+  const handleConfirmNotice = () => {
+    if (!selectedMatter || !citizen) return
+    addAuditRecord(makeNoticeRecord(noticeAction))
+    setNoticeVisible(false)
+    message.success(
+      noticeAction === "print"
+        ? "一次性告知单已发送至打印队列，操作已留痕"
+        : "一次性告知单已导出，操作已留痕"
+    )
+  }
 
   const showLicenseList = selectedMatter && citizen
 
@@ -214,7 +276,7 @@ export default function Reception() {
           >
             <div className="flex items-center gap-3">
               <Input
-                placeholder="请输入群众身份证号码"
+                placeholder="请输入群众身份证号码（示例：110101199001011234）"
                 value={idInput}
                 onChange={(e) => setIdInput(e.target.value)}
                 onPressEnter={handleIdSearch}
@@ -238,13 +300,16 @@ export default function Reception() {
                 <div className="w-12 h-12 rounded-full bg-[#1B3A5C] flex items-center justify-center">
                   <User size={24} className="text-white" />
                 </div>
-                <div>
+                <div className="flex-1">
                   <div className="font-medium text-[#1B3A5C] text-base">{citizen.name}</div>
                   <div className="text-sm text-gray-500">
                     {citizen.gender} · {citizen.idNumber}
                   </div>
                   <div className="text-xs text-gray-400 mt-0.5">{citizen.address}</div>
                 </div>
+                <Tag color="cyan" icon={<ScanLine size={12} />}>
+                  已刷证
+                </Tag>
               </div>
             )}
           </Card>
@@ -266,18 +331,27 @@ export default function Reception() {
                 }
                 extra={
                   <div className="flex gap-2">
-                    <Button
-                      icon={<RefreshCw size={14} />}
-                      size="small"
-                      onClick={handleRefresh}
-                    >
+                    <Button icon={<RefreshCw size={14} />} size="small" onClick={handleRefresh}>
                       刷新状态
                     </Button>
                     <Button
-                      icon={<Printer size={14} />}
+                      icon={<Eye size={14} />}
                       size="small"
-                      onClick={handlePrintNotice}
+                      onClick={() => {
+                        setNoticeAction("print")
+                        setNoticeVisible(true)
+                      }}
                     >
+                      预览告知单
+                    </Button>
+                    <Button
+                      icon={<FileDown size={14} />}
+                      size="small"
+                      onClick={handleExportNotice}
+                    >
+                      导出告知单
+                    </Button>
+                    <Button icon={<Printer size={14} />} size="small" onClick={handlePrintNotice}>
                       打印告知单
                     </Button>
                   </div>
@@ -308,22 +382,43 @@ export default function Reception() {
                   <>
                     <Divider className="my-3" />
                     <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-                      <div className="text-sm font-medium text-red-700 mb-1">
-                        ⚠ 缺失证照 - 以下证照群众未持有，需补充提交
+                      <div className="flex items-center gap-2 mb-2">
+                        <AlertTriangle size={16} className="text-red-600" />
+                        <span className="text-sm font-medium text-red-700">
+                          缺失证照（共 {missingLicenseIds.length} 项）- 以下证照群众未持有，需补充提交
+                        </span>
                       </div>
-                      <div className="text-sm text-red-600">
-                        共 {missingLicenseIds.length} 项缺失：{missingLicenseIds.join("、")}
+                      <div className="text-sm text-red-600 mb-3">
+                        {missingLicenseNames.join("、")}
                       </div>
-                      <Button
-                        size="small"
-                        className="mt-2"
-                        type="primary"
-                        danger
-                        icon={<Printer size={14} />}
-                        onClick={handlePrintNotice}
-                      >
-                        生成一次性告知单
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button
+                          size="small"
+                          type="primary"
+                          danger
+                          icon={<Eye size={14} />}
+                          onClick={() => {
+                            setNoticeAction("print")
+                            setNoticeVisible(true)
+                          }}
+                        >
+                          预览一次性告知单
+                        </Button>
+                        <Button
+                          size="small"
+                          icon={<Printer size={14} />}
+                          onClick={handlePrintNotice}
+                        >
+                          打印
+                        </Button>
+                        <Button
+                          size="small"
+                          icon={<FileDown size={14} />}
+                          onClick={handleExportNotice}
+                        >
+                          导出
+                        </Button>
+                      </div>
                     </div>
                   </>
                 )}
@@ -354,6 +449,117 @@ export default function Reception() {
           )}
         </div>
       </div>
+
+      <Modal
+        title={
+          <div className="flex items-center gap-2 text-[#1B3A5C]">
+            <FileBadge size={18} />
+            <span>一次性告知单{noticeAction === "print" ? "（打印预览）" : "（导出预览）"}</span>
+          </div>
+        }
+        open={noticeVisible}
+        onCancel={() => setNoticeVisible(false)}
+        onOk={handleConfirmNotice}
+        okText={noticeAction === "print" ? "确认打印" : "确认导出"}
+        cancelText="取消"
+        width={720}
+      >
+        {selectedMatter && citizen && (
+          <div className="border rounded-lg p-6 bg-white">
+            <div className="text-center mb-5">
+              <div className="text-lg font-bold text-[#1B3A5C]">政务服务一次性告知单</div>
+              <div className="text-xs text-gray-400 mt-1">
+                编号：GZ-{dayjs().format("YYYYMMDD")}-{Math.floor(Math.random() * 9000 + 1000)}
+              </div>
+            </div>
+
+            <Descriptions column={2} size="small" bordered className="mb-4">
+              <Descriptions.Item label="办理事项" span={2}>
+                <span className="font-medium text-[#1B3A5C]">{selectedMatter.name}</span>
+              </Descriptions.Item>
+              <Descriptions.Item label="承办部门">{selectedMatter.department}</Descriptions.Item>
+              <Descriptions.Item label="办理窗口">窗口1</Descriptions.Item>
+              <Descriptions.Item label="群众姓名">{citizen.name}</Descriptions.Item>
+              <Descriptions.Item label="身份证号">{citizen.idNumber}</Descriptions.Item>
+              <Descriptions.Item label="窗口人员">王丽娟（OP001）</Descriptions.Item>
+              <Descriptions.Item label="告知日期">{dayjs().format("YYYY-MM-DD HH:mm")}</Descriptions.Item>
+            </Descriptions>
+
+            <div className="mb-4">
+              <div className="text-sm font-medium text-[#1B3A5C] mb-2">一、已可调用的电子证照（{currentLicenses.length} 项）</div>
+              {currentLicenses.length > 0 ? (
+                <div className="border rounded">
+                  <div className="grid grid-cols-12 bg-gray-50 px-3 py-2 text-xs font-medium text-gray-500">
+                    <div className="col-span-1">序号</div>
+                    <div className="col-span-5">证照名称</div>
+                    <div className="col-span-4">证照编号</div>
+                    <div className="col-span-2">状态</div>
+                  </div>
+                  {currentLicenses.map((lic, idx) => (
+                    <div key={lic.id} className="grid grid-cols-12 px-3 py-2 border-t text-sm">
+                      <div className="col-span-1 text-gray-400">{idx + 1}</div>
+                      <div className="col-span-5">{lic.name}</div>
+                      <div className="col-span-4 font-mono text-xs text-gray-600">{lic.licenseNumber}</div>
+                      <div className="col-span-2">
+                        <Tag color={lic.status === "normal" ? "green" : "red"}>
+                          {lic.status === "normal" ? "正常" : lic.status === "expired" ? "已过期" : lic.status === "revoked" ? "已吊销" : "已挂失"}
+                        </Tag>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-sm text-gray-400">暂无可调用电子证照</div>
+              )}
+            </div>
+
+            <div className="mb-4">
+              <div className="text-sm font-medium text-red-600 mb-2">
+                二、需补交的纸质材料（{missingLicenseIds.length} 项）
+              </div>
+              {missingLicenseIds.length > 0 ? (
+                <div className="border border-red-200 rounded bg-red-50">
+                  <div className="grid grid-cols-12 bg-red-100 px-3 py-2 text-xs font-medium text-red-600">
+                    <div className="col-span-1">序号</div>
+                    <div className="col-span-5">材料/证照名称</div>
+                    <div className="col-span-6">补交说明</div>
+                  </div>
+                  {missingLicenseNames.map((name, idx) => (
+                    <div key={idx} className="grid grid-cols-12 px-3 py-2 border-t border-red-100 text-sm">
+                      <div className="col-span-1 text-gray-400">{idx + 1}</div>
+                      <div className="col-span-5 text-red-700">{name}</div>
+                      <div className="col-span-6 text-gray-600 text-xs">
+                        群众未持有该电子证照，需携带原件及复印件至窗口核验，复印件需加盖"与原件一致"章并由群众签字确认。
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-sm text-green-600">✓ 本事项所需证照群众均已持有，无需补交</div>
+              )}
+            </div>
+
+            <div className="mb-4">
+              <div className="text-sm font-medium text-gray-700 mb-2">三、办理须知</div>
+              <ul className="text-xs text-gray-500 space-y-1 list-disc pl-5">
+                <li>请群众在补交材料前认真核对以上清单，如有疑问可咨询窗口工作人员</li>
+                <li>已调用的电子证照无需重复提交纸质材料，系统将自动核验并留存记录</li>
+                <li>所有操作均已记入电子证照调用留痕档案，可随时查询追溯</li>
+                <li>本告知单一式两份，窗口留存一份，群众带走一份</li>
+              </ul>
+            </div>
+
+            <div className="flex justify-between items-end pt-4 border-t">
+              <div className="text-xs text-gray-400">
+                窗口人员签字：____________<span className="ml-4">日期：{dayjs().format("YYYY年MM月DD日")}</span>
+              </div>
+              <div className="text-xs text-gray-400">
+                群众签字确认：____________
+              </div>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   )
 }

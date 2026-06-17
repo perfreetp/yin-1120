@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react"
-import { Card, Table, Tag, Button, Input, DatePicker, Select, Modal, Descriptions, message } from "antd"
+import { Card, Table, Tag, Button, Input, DatePicker, Select, Modal, Descriptions, message, Tabs, Timeline, Empty } from "antd"
 import type { Dayjs } from "dayjs"
 import {
   FileText,
@@ -8,6 +8,13 @@ import {
   Download,
   Eye,
   FileDown,
+  ScanLine,
+  ShieldCheck,
+  PhoneCall,
+  MousePointerClick,
+  Printer,
+  ArrowLeftRight,
+  GitBranch,
 } from "lucide-react"
 import { useAuditStore } from "@/stores/useAuditStore"
 import type { AuditRecord } from "@/types"
@@ -15,10 +22,14 @@ import dayjs from "dayjs"
 
 const { RangePicker } = DatePicker
 
-const actionMap: Record<string, { color: string; text: string }> = {
-  view: { color: "blue", text: "查看" },
-  download: { color: "green", text: "下载" },
-  call: { color: "purple", text: "调用" },
+const actionMap: Record<string, { color: string; text: string; icon: React.ReactNode }> = {
+  scan: { color: "cyan", text: "刷证识别", icon: <ScanLine size={14} /> },
+  verify: { color: "blue", text: "证照核验", icon: <ShieldCheck size={14} /> },
+  call: { color: "purple", text: "证照调用", icon: <PhoneCall size={14} /> },
+  view: { color: "geekblue", text: "查看详情", icon: <Eye size={14} /> },
+  download: { color: "green", text: "下载证照", icon: <FileDown size={14} /> },
+  export: { color: "gold", text: "导出报告", icon: <Download size={14} /> },
+  print: { color: "orange", text: "打印输出", icon: <Printer size={14} /> },
 }
 
 const reasonCategoryMap: Record<string, string> = {
@@ -41,6 +52,9 @@ export default function Audit() {
   const [dateRange, setDateRange] = useState<[Dayjs | null, Dayjs | null] | null>(null)
   const [detailRecord, setDetailRecord] = useState<AuditRecord | null>(null)
   const [detailVisible, setDetailVisible] = useState(false)
+  const [chainView, setChainView] = useState<"list" | "chain">("list")
+  const [chainBy, setChainBy] = useState<"citizen" | "matter">("citizen")
+  const [selectedChainId, setSelectedChainId] = useState<string>("")
 
   const windows = useMemo(() => [...new Set(records.map((r) => r.windowNo))], [records])
 
@@ -65,9 +79,40 @@ export default function Audit() {
     })
   }, [records, searchText, windowFilter, actionFilter, dateRange])
 
-  const addAuditRecord = (record: AuditRecord, actionType: "view" | "download", desc: string) => {
+  const chainGroups = useMemo(() => {
+    const groups = new Map<string, AuditRecord[]>()
+    filteredRecords.forEach((r) => {
+      const key = chainBy === "citizen" ? r.citizenId : r.matterId
+      const list = groups.get(key) || []
+      list.push(r)
+      groups.set(key, list)
+    })
+    Array.from(groups.values()).forEach((list) =>
+      list.sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+    )
+    return groups
+  }, [filteredRecords, chainBy])
+
+  const chainOptions = useMemo(() => {
+    const set = new Set<{ id: string; name: string }>()
+    filteredRecords.forEach((r) => {
+      if (chainBy === "citizen") {
+        set.add({ id: r.citizenId, name: `${r.citizenName} (${r.citizenId.slice(-4)})` })
+      } else {
+        set.add({ id: r.matterId, name: r.matterName })
+      }
+    })
+    return Array.from(set)
+  }, [filteredRecords, chainBy])
+
+  const selectedChainRecords = useMemo(() => {
+    if (!selectedChainId) return []
+    return (chainGroups.get(selectedChainId) || []).sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+  }, [selectedChainId, chainGroups])
+
+  const addAuditRecord = (record: AuditRecord, actionType: AuditRecord["action"], desc: string) => {
     addRecord({
-      id: `A${Date.now()}`,
+      id: `A${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       licenseId: record.licenseId,
       licenseName: record.licenseName,
       matterId: record.matterId,
@@ -88,7 +133,7 @@ export default function Audit() {
   const handleViewDetail = (record: AuditRecord) => {
     setDetailRecord(record)
     setDetailVisible(true)
-    addAuditRecord(record, "view", `查看${record.licenseName}详情`)
+    addAuditRecord(record, "view", `查看${record.licenseName}调用详情`)
     message.success("查看详情已自动留痕")
   }
 
@@ -99,7 +144,7 @@ export default function Audit() {
 
   const handleExport = () => {
     const rec: AuditRecord = {
-      id: `A${Date.now()}`,
+      id: `A${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       licenseId: "EXPORT",
       licenseName: "记录导出",
       matterId: "ALL",
@@ -120,7 +165,7 @@ export default function Audit() {
         missingLicenses: [],
       },
       signatureDataUrl: "",
-      action: "download",
+      action: "export",
       createdAt: dayjs().format("YYYY-MM-DD HH:mm:ss"),
     }
     addRecord(rec)
@@ -132,6 +177,7 @@ export default function Audit() {
     setWindowFilter("")
     setActionFilter("")
     setDateRange(null)
+    setSelectedChainId("")
     message.info("筛选条件已重置")
   }
 
@@ -148,38 +194,38 @@ export default function Audit() {
       title: "窗口",
       dataIndex: "windowNo",
       key: "windowNo",
-      width: "7%",
+      width: "6%",
     },
     {
       title: "操作人",
       dataIndex: "operatorName",
       key: "operatorName",
-      width: "8%",
+      width: "7%",
     },
     {
       title: "办理事项",
       dataIndex: "matterName",
       key: "matterName",
-      width: "16%",
+      width: "15%",
       ellipsis: true,
     },
     {
       title: "证照",
       dataIndex: "licenseName",
       key: "licenseName",
-      width: "12%",
+      width: "11%",
     },
     {
       title: "群众",
       dataIndex: "citizenName",
       key: "citizenName",
-      width: "7%",
+      width: "6%",
     },
     {
       title: "调用原因",
       dataIndex: "callReason",
       key: "callReason",
-      width: "18%",
+      width: "20%",
       render: (reason: AuditRecord["callReason"]) => (
         <span>
           <Tag color="blue" className="mr-1">
@@ -193,16 +239,20 @@ export default function Audit() {
       title: "操作类型",
       dataIndex: "action",
       key: "action",
-      width: "7%",
+      width: "8%",
       render: (action: string) => {
-        const cfg = actionMap[action] || { color: "default", text: action }
-        return <Tag color={cfg.color}>{cfg.text}</Tag>
+        const cfg = actionMap[action] || { color: "default", text: action, icon: null }
+        return (
+          <Tag color={cfg.color} icon={cfg.icon}>
+            {cfg.text}
+          </Tag>
+        )
       },
     },
     {
       title: "操作",
       key: "actions",
-      width: "9%",
+      width: "11%",
       render: (_: unknown, record: AuditRecord) => (
         <div className="flex gap-1">
           <Button
@@ -232,6 +282,36 @@ export default function Audit() {
         <FileText size={22} className="text-[#1B3A5C]" />
         <h2 className="text-lg font-bold text-[#1B3A5C] m-0">留痕档案</h2>
         <span className="text-sm text-gray-400">共 {filteredRecords.length} 条调用记录</span>
+        <div className="ml-auto">
+          <Tabs
+            activeKey={chainView}
+            onChange={(v) => {
+              setChainView(v as "list" | "chain")
+              setSelectedChainId("")
+            }}
+            size="small"
+            items={[
+              {
+                key: "list",
+                label: (
+                  <span className="flex items-center gap-1">
+                    <MousePointerClick size={14} />
+                    列表视图
+                  </span>
+                ),
+              },
+              {
+                key: "chain",
+                label: (
+                  <span className="flex items-center gap-1">
+                    <GitBranch size={14} />
+                    操作链路
+                  </span>
+                ),
+              },
+            ]}
+          />
+        </div>
       </div>
 
       <Card className="shadow-sm" styles={{ body: { padding: "12px 16px" } }}>
@@ -257,11 +337,15 @@ export default function Audit() {
             value={actionFilter || undefined}
             onChange={(v) => setActionFilter(v || "")}
             allowClear
-            className="w-28"
+            className="w-32"
             options={[
-              { value: "call", label: "调用" },
-              { value: "view", label: "查看" },
-              { value: "download", label: "下载" },
+              { value: "scan", label: "刷证识别" },
+              { value: "verify", label: "证照核验" },
+              { value: "call", label: "证照调用" },
+              { value: "view", label: "查看详情" },
+              { value: "download", label: "下载证照" },
+              { value: "export", label: "导出报告" },
+              { value: "print", label: "打印输出" },
             ]}
           />
           <RangePicker
@@ -270,6 +354,34 @@ export default function Audit() {
             className="w-60"
             allowClear
           />
+          {chainView === "chain" && (
+            <>
+              <Select
+                value={chainBy}
+                onChange={(v) => {
+                  setChainBy(v as "citizen" | "matter")
+                  setSelectedChainId("")
+                }}
+                className="w-32"
+                options={[
+                  { value: "citizen", label: "按群众回溯" },
+                  { value: "matter", label: "按事项回溯" },
+                ]}
+              />
+              <Select
+                placeholder={chainBy === "citizen" ? "选择群众..." : "选择事项..."}
+                value={selectedChainId || undefined}
+                onChange={(v) => setSelectedChainId(v || "")}
+                allowClear
+                className="w-52"
+                showSearch
+                filterOption={(input, option) =>
+                  ((option?.label as string) || "").toLowerCase().includes(input.toLowerCase())
+                }
+                options={chainOptions.map((o) => ({ value: o.id, label: o.name }))}
+              />
+            </>
+          )}
           <Button icon={<RotateCcw size={14} />} onClick={handleReset}>
             重置
           </Button>
@@ -281,19 +393,110 @@ export default function Audit() {
         </div>
       </Card>
 
-      <Card className="shadow-sm" styles={{ body: { padding: 0 } }}>
-        <Table
-          dataSource={filteredRecords}
-          columns={columns}
-          pagination={{
-            pageSize: 10,
-            showSizeChanger: true,
-            showTotal: (total) => `共 ${total} 条`,
-          }}
-          size="small"
-          rowKey="id"
-        />
-      </Card>
+      {chainView === "list" ? (
+        <Card className="shadow-sm" styles={{ body: { padding: 0 } }}>
+          <Table
+            dataSource={filteredRecords}
+            columns={columns}
+            pagination={{
+              pageSize: 10,
+              showSizeChanger: true,
+              showTotal: (total) => `共 ${total} 条`,
+            }}
+            size="small"
+            rowKey="id"
+          />
+        </Card>
+      ) : selectedChainId && selectedChainRecords.length > 0 ? (
+        <Card
+          className="shadow-sm"
+          title={
+            <div className="flex items-center gap-2">
+              <ArrowLeftRight size={16} className="text-[#1B3A5C]" />
+              <span className="text-[#1B3A5C] font-medium">
+                {chainBy === "citizen"
+                  ? `群众 ${selectedChainRecords[0].citizenName} 的完整操作链路`
+                  : `事项 ${selectedChainRecords[0].matterName} 的完整操作链路`}
+              </span>
+              <Tag color="blue">共 {selectedChainRecords.length} 个动作</Tag>
+              {chainBy === "citizen" && (
+                <span className="text-xs text-gray-400">身份证号：{selectedChainRecords[0].citizenId}</span>
+              )}
+            </div>
+          }
+          styles={{ body: { padding: "20px 30px" } }}
+        >
+          <Timeline
+            mode="left"
+            items={selectedChainRecords.map((r) => {
+              const cfg = actionMap[r.action] || { color: "default", text: r.action, icon: null }
+              return {
+                dot: (
+                  <div
+                    className="w-8 h-8 rounded-full flex items-center justify-center text-white"
+                    style={{ background: r.action === "scan" ? "#13C2C2" : r.action === "verify" ? "#1677ff" : r.action === "call" ? "#722ED1" : r.action === "view" ? "#2F54EB" : r.action === "download" ? "#52C41A" : r.action === "export" ? "#FAAD14" : "#FA8C16" }}
+                  >
+                    {cfg.icon}
+                  </div>
+                ),
+                color: r.action === "scan" ? "cyan" : r.action === "verify" ? "blue" : r.action === "call" ? "purple" : r.action === "view" ? "geekblue" : r.action === "download" ? "green" : r.action === "export" ? "gold" : "orange",
+                children: (
+                  <div className="pl-2 pb-4">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Tag color={cfg.color} icon={cfg.icon}>
+                        {cfg.text}
+                      </Tag>
+                      <span className="font-medium text-[#1B3A5C]">{r.licenseName}</span>
+                      <span className="text-xs text-gray-400">事项：{r.matterName}</span>
+                    </div>
+                    <div className="text-sm text-gray-500 space-y-0.5">
+                      <div>
+                        <span className="text-gray-400">窗口：</span>
+                        {r.windowNo}
+                        <span className="mx-2 text-gray-300">|</span>
+                        <span className="text-gray-400">操作人：</span>
+                        {r.operatorName}
+                        <span className="mx-2 text-gray-300">|</span>
+                        <span className="text-gray-400">群众：</span>
+                        {r.citizenName}
+                      </div>
+                      <div>
+                        <span className="text-gray-400">调用原因：</span>
+                        <Tag color="blue">{reasonCategoryMap[r.callReason.category]}</Tag>
+                        <span className="text-gray-600">{r.callReason.description}</span>
+                      </div>
+                    </div>
+                    <div className="mt-2">
+                      <Button
+                        type="link"
+                        size="small"
+                        icon={<Eye size={13} />}
+                        onClick={() => handleViewDetail(r)}
+                        style={{ padding: 0 }}
+                      >
+                        查看详情
+                      </Button>
+                    </div>
+                  </div>
+                ),
+                label: <div className="text-sm font-mono text-gray-500 pt-1">{r.createdAt}</div>,
+              }
+            })}
+          />
+        </Card>
+      ) : (
+        <Card className="shadow-sm" styles={{ body: { padding: "40px 20px" } }}>
+          <Empty
+            description={
+              <div className="text-gray-400">
+                <div className="text-base mb-1">请选择要回溯的{chainBy === "citizen" ? "群众" : "事项"}</div>
+                <div className="text-sm">可按群众或事项维度查看完整操作链路时间线</div>
+              </div>
+            }
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+          />
+        </Card>
+      )}
 
       <Modal
         title={
@@ -305,7 +508,7 @@ export default function Audit() {
         open={detailVisible}
         onCancel={() => setDetailVisible(false)}
         footer={null}
-        width={760}
+        width={780}
       >
         {detailRecord && (
           <div className="space-y-4">
@@ -318,9 +521,14 @@ export default function Audit() {
                 {detailRecord.operatorName}
               </Descriptions.Item>
               <Descriptions.Item label="操作类型">
-                <Tag color={actionMap[detailRecord.action]?.color}>
-                  {actionMap[detailRecord.action]?.text}
-                </Tag>
+                {(() => {
+                  const cfg = actionMap[detailRecord.action] || { color: "default", text: detailRecord.action, icon: null }
+                  return (
+                    <Tag color={cfg.color} icon={cfg.icon}>
+                      {cfg.text}
+                    </Tag>
+                  )
+                })()}
               </Descriptions.Item>
               <Descriptions.Item label="办理事项" span={2}>
                 {detailRecord.matterName}
@@ -342,7 +550,7 @@ export default function Audit() {
               </Descriptions.Item>
             </Descriptions>
 
-            {detailRecord.verificationResult && (
+            {detailRecord.verificationResult && detailRecord.licenseId !== "SYSTEM" && detailRecord.licenseId !== "NOTICE" && detailRecord.licenseId !== "EXPORT" && (
               <div>
                 <div className="text-sm font-medium text-gray-700 mb-2">核验结果</div>
                 <div className="grid grid-cols-3 gap-3">
@@ -409,9 +617,9 @@ export default function Audit() {
                           }`}
                         >
                           <div className="text-gray-600">{f.formField}</div>
-                          <div>{f.formValue}</div>
+                          <div className="font-mono">{f.formValue}</div>
                           <div className="text-gray-600">{f.licenseField}</div>
-                          <div>{f.licenseValue}</div>
+                          <div className="font-mono">{f.licenseValue}</div>
                           <div>
                             <Tag
                               color={f.result === "match" ? "green" : f.result === "mismatch" ? "red" : "orange"}

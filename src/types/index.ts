@@ -98,7 +98,7 @@ export interface AuditRecord {
   callReason: LicenseCallReason
   verificationResult: VerificationResult
   signatureDataUrl: string
-  action: "view" | "download" | "call"
+  action: "scan" | "verify" | "call" | "view" | "download" | "export" | "print"
   createdAt: string
 }
 

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react"
 import { useParams, useNavigate } from "react-router-dom"
-import { Card, Select, Input, Button, Table, Tag, message, Alert, Divider, Steps } from "antd"
+import { Card, Select, Input, Button, Table, Tag, message, Alert, Divider, Steps, Modal } from "antd"
 import {
   ShieldCheck,
   Clock,
@@ -11,12 +11,14 @@ import {
   Copy,
   FileDown,
   ArrowLeft,
+  Printer,
+  Download,
 } from "lucide-react"
 import { useLicenseStore } from "@/stores/useLicenseStore"
 import { useMatterStore } from "@/stores/useMatterStore"
 import { useAuditStore } from "@/stores/useAuditStore"
 import SignPad from "@/components/SignPad"
-import type { VerificationResult, LicenseCallReason } from "@/types"
+import type { VerificationResult, LicenseCallReason, AuditRecord } from "@/types"
 import dayjs from "dayjs"
 
 export default function Verify() {
@@ -29,14 +31,44 @@ export default function Verify() {
   const [verificationResult, setVerificationResult] = useState<VerificationResult | null>(null)
   const [signatureData, setSignatureData] = useState<string>("")
   const [step, setStep] = useState(0)
+  const [exportVisible, setExportVisible] = useState(false)
 
   const license = id ? currentLicenses.find((l) => l.id === id) : null
+
+  const makeRecord = (action: AuditRecord["action"], desc: string): AuditRecord => ({
+    id: `A${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    licenseId: license?.id || "",
+    licenseName: license?.name || "",
+    matterId: selectedMatter?.id || "",
+    matterName: selectedMatter?.name || "",
+    windowNo: "窗口1",
+    operatorId: "OP001",
+    operatorName: "王丽娟",
+    citizenId: citizen?.idNumber || "",
+    citizenName: citizen?.name || "",
+    callReason: { category: (callReason?.category || "material_verification") as LicenseCallReason["category"], description: desc },
+    verificationResult: verificationResult || {
+      licenseId: license?.id || "",
+      expiryCheck: "valid",
+      authorityCheck: "consistent",
+      statusCheck: "normal",
+      fieldComparison: [],
+      duplicateWarning: false,
+      missingLicenses: [],
+    },
+    signatureDataUrl: signatureData,
+    action,
+    createdAt: dayjs().format("YYYY-MM-DD HH:mm:ss"),
+  })
 
   useEffect(() => {
     if (license && !verificationResult) {
       const result = verifyLicense(license)
       setVerificationResult(result)
       setStep(1)
+      addAuditRecord({
+        ...makeRecord("verify", `核验${license.name}信息`),
+      })
     }
   }, [license])
 
@@ -64,27 +96,28 @@ export default function Verify() {
     if (!license || !selectedMatter || !citizen || !callReason || !verificationResult) return
 
     markCalled(license.id)
-
-    addAuditRecord({
-      id: `A${Date.now()}`,
-      licenseId: license.id,
-      licenseName: license.name,
-      matterId: selectedMatter.id,
-      matterName: selectedMatter.name,
-      windowNo: "窗口1",
-      operatorId: "OP001",
-      operatorName: "王丽娟",
-      citizenId: citizen.idNumber,
-      citizenName: citizen.name,
-      callReason,
-      verificationResult,
-      signatureDataUrl: signatureData,
-      action: "call",
-      createdAt: dayjs().format("YYYY-MM-DD HH:mm:ss"),
-    })
+    addAuditRecord(makeRecord("call", `调用${license.name}用于${selectedMatter.name}办理`))
 
     message.success("证照调用完成，已自动留痕")
     navigate("/")
+  }
+
+  const handleDownload = () => {
+    if (!license) return
+    addAuditRecord(makeRecord("download", `下载${license.name}电子证照存档`))
+    message.success(`已下载${license.name}，操作已留痕`)
+  }
+
+  const handleExport = () => {
+    if (!license) return
+    setExportVisible(true)
+  }
+
+  const handleConfirmExport = () => {
+    if (!license) return
+    addAuditRecord(makeRecord("export", `导出${license.name}核验报告`))
+    setExportVisible(false)
+    message.success("核验报告已导出，操作已留痕")
   }
 
   const expiryConfig: Record<string, { icon: React.ReactNode; color: string; text: string; bg: string }> = {
@@ -336,19 +369,37 @@ export default function Verify() {
           {step >= 3 && (
             <>
               <Divider className="my-2" />
-              <div className="flex gap-3">
+              <div className="grid grid-cols-2 gap-3">
                 <Button
-                  icon={<FileDown size={16} />}
-                  onClick={() => message.info("证照下载已自动留痕")}
-                  className="flex-1"
+                  icon={<Download size={16} />}
+                  onClick={handleDownload}
+                  className="w-full"
                 >
                   下载证照
+                </Button>
+                <Button
+                  icon={<FileDown size={16} />}
+                  onClick={handleExport}
+                  className="w-full"
+                >
+                  导出报告
+                </Button>
+                <Button
+                  icon={<Printer size={16} />}
+                  onClick={() => {
+                    if (!license) return
+                    addAuditRecord(makeRecord("print", `打印${license.name}证照信息`))
+                    message.success("证照打印任务已提交，操作已留痕")
+                  }}
+                  className="w-full col-span-2"
+                >
+                  打印证照
                 </Button>
                 <Button
                   type="primary"
                   onClick={handleComplete}
                   style={{ background: "#2EAD6B" }}
-                  className="flex-1"
+                  className="w-full col-span-2"
                 >
                   完成调用
                 </Button>
@@ -357,6 +408,26 @@ export default function Verify() {
           )}
         </div>
       </div>
+
+      <Modal
+        title="导出证照核验报告"
+        open={exportVisible}
+        onCancel={() => setExportVisible(false)}
+        onOk={handleConfirmExport}
+        okText="确认导出"
+        cancelText="取消"
+      >
+        <div className="space-y-3 text-sm text-gray-600">
+          <div>本次导出将包含以下内容：</div>
+          <ul className="list-disc pl-5 space-y-1">
+            <li>{license.name}证照基本信息</li>
+            <li>有效期、签发机关、状态核验结果</li>
+            <li>字段比对明细（共 {verificationResult?.fieldComparison.length || 0} 项）</li>
+            <li>调用原因与群众签字（如有）</li>
+          </ul>
+          <div className="text-gray-400 text-xs mt-2">导出操作将自动记入留痕档案</div>
+        </div>
+      </Modal>
     </div>
   )
 }
