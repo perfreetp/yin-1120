@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { useNavigate } from "react-router-dom"
 import { Input, Card, Empty, Button, Tag, message, Divider, Modal, Descriptions } from "antd"
 import {
@@ -16,8 +16,9 @@ import {
 import { useMatterStore } from "@/stores/useMatterStore"
 import { useLicenseStore } from "@/stores/useLicenseStore"
 import { useAuditStore } from "@/stores/useAuditStore"
+import { useNoticeStore } from "@/stores/useNoticeStore"
 import LicenseCard from "@/components/LicenseCard"
-import type { AuditRecord } from "@/types"
+import type { AuditRecord, NoticeRecord, SupplementItem } from "@/types"
 import { licenses as allLicensesData } from "@/mock/licenses"
 import dayjs from "dayjs"
 
@@ -35,6 +36,7 @@ export default function Reception() {
   } = useMatterStore()
   const { allLicenses, currentLicenses, setCurrentLicenses, reset: resetLicense } = useLicenseStore()
   const addAuditRecord = useAuditStore((s) => s.addRecord)
+  const { addNotice, notices, getNoticeByCitizenMatter } = useNoticeStore()
 
   const [idInput, setIdInput] = useState("")
   const [idSearchLoading, setIdSearchLoading] = useState(false)
@@ -179,7 +181,34 @@ export default function Reception() {
 
   const handleConfirmNotice = () => {
     if (!selectedMatter || !citizen) return
-    addAuditRecord(makeNoticeRecord(noticeAction))
+    const audit = makeNoticeRecord(noticeAction)
+    addAuditRecord(audit)
+    const supplements: SupplementItem[] = missingLicenseIds.map((id) => ({
+      licenseId: id,
+      licenseName: missingLicenseNames[missingLicenseIds.indexOf(id)] || id,
+      status: "pending",
+    }))
+    let notice = getNoticeByCitizenMatter(citizen.idNumber, selectedMatter.id)
+    if (!notice) {
+      notice = {
+        id: `N${Date.now()}${Math.floor(Math.random() * 1000)}`,
+        citizenId: citizen.idNumber,
+        citizenName: citizen.name,
+        matterId: selectedMatter.id,
+        matterName: selectedMatter.name,
+        windowNo: "窗口1",
+        operatorName: "王丽娟",
+        supplements,
+        createdAt: dayjs().format("YYYY-MM-DD HH:mm:ss"),
+      }
+      addNotice(notice)
+    }
+    if (noticeAction === "print" && !notice.printedAt) {
+      notice.printedAt = dayjs().format("YYYY-MM-DD HH:mm:ss")
+    }
+    if (noticeAction === "export" && !notice.exportedAt) {
+      notice.exportedAt = dayjs().format("YYYY-MM-DD HH:mm:ss")
+    }
     setNoticeVisible(false)
     message.success(
       noticeAction === "print"
@@ -187,6 +216,11 @@ export default function Reception() {
         : "一次性告知单已导出，操作已留痕"
     )
   }
+
+  const currentNotice = useMemo(
+    () => (selectedMatter && citizen ? getNoticeByCitizenMatter(citizen.idNumber, selectedMatter.id) : undefined),
+    [selectedMatter, citizen, notices]
+  )
 
   const showLicenseList = selectedMatter && citizen
 
@@ -391,6 +425,26 @@ export default function Reception() {
                       <div className="text-sm text-red-600 mb-3">
                         {missingLicenseNames.join("、")}
                       </div>
+                      {currentNotice && currentNotice.supplements.length > 0 && (
+                        <div className="bg-white rounded p-2 mb-3 border border-red-100">
+                          <div className="text-xs font-medium text-gray-600 mb-1.5">
+                            📋 补交进度（告知单 {currentNotice.id}）
+                            {currentNotice.printedAt && <Tag color="orange" className="ml-2 text-xs">已打印</Tag>}
+                            {currentNotice.exportedAt && <Tag color="gold" className="ml-1 text-xs">已导出</Tag>}
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {currentNotice.supplements.map((s) => (
+                              <Tag
+                                key={s.licenseId}
+                                color={s.status === "submitted" ? "green" : s.status === "returned" ? "red" : "orange"}
+                                className="text-xs"
+                              >
+                                {s.licenseName}：{s.status === "submitted" ? "已补交" : s.status === "returned" ? "退回补正" : "待补交"}
+                              </Tag>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                       <div className="flex gap-2">
                         <Button
                           size="small"

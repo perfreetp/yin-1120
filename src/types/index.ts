@@ -98,8 +98,40 @@ export interface AuditRecord {
   callReason: LicenseCallReason
   verificationResult: VerificationResult
   signatureDataUrl: string
-  action: "scan" | "verify" | "call" | "view" | "download" | "export" | "print"
+  action: "scan" | "verify" | "call" | "view" | "download" | "export" | "print" | "submit_supplement" | "return_supplement" | "matter_select"
   createdAt: string
+}
+
+export interface SupplementItem {
+  licenseId: string
+  licenseName: string
+  status: "pending" | "submitted" | "returned"
+  submittedAt?: string
+  submittedBy?: string
+  remark?: string
+}
+
+export interface NoticeRecord {
+  id: string
+  citizenId: string
+  citizenName: string
+  matterId: string
+  matterName: string
+  windowNo: string
+  operatorName: string
+  supplements: SupplementItem[]
+  createdAt: string
+  printedAt?: string
+  exportedAt?: string
+}
+
+export interface AuditFilter {
+  searchText: string
+  windowFilter: string
+  actionFilter: string
+  dateRange: [string, string] | null
+  matterFilter: string
+  citizenFilter: string
 }
 
 export interface TrendItem {
