@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { Input, Card, Empty, Button, Tag, message, Divider } from "antd"
 import {
@@ -12,7 +12,10 @@ import {
 } from "lucide-react"
 import { useMatterStore } from "@/stores/useMatterStore"
 import { useLicenseStore } from "@/stores/useLicenseStore"
+import { useAuditStore } from "@/stores/useAuditStore"
 import LicenseCard from "@/components/LicenseCard"
+import type { AuditRecord } from "@/types"
+import dayjs from "dayjs"
 
 export default function Reception() {
   const navigate = useNavigate()
@@ -26,14 +29,27 @@ export default function Reception() {
     setCitizen,
     filteredMatters,
   } = useMatterStore()
-  const { setCurrentLicenses } = useLicenseStore()
+  const { allLicenses, currentLicenses, setCurrentLicenses, reset: resetLicense } = useLicenseStore()
+  const addAuditRecord = useAuditStore((s) => s.addRecord)
 
   const [idInput, setIdInput] = useState("")
   const [idSearchLoading, setIdSearchLoading] = useState(false)
 
   const matters = filteredMatters()
-
   const categories = [...new Set(matters.map((m) => m.category))]
+
+  useEffect(() => {
+    if (selectedMatter && citizen) {
+      const citizenLicenses = allLicenses.filter(
+        (l) => l.holderIdNumber === citizen.idNumber
+      )
+      const matterLicenseIds = selectedMatter.requiredLicenses
+      const matched = citizenLicenses.filter((l) => matterLicenseIds.includes(l.id))
+      setCurrentLicenses(matched.map((l) => l.id))
+    } else {
+      resetLicense()
+    }
+  }, [selectedMatter, citizen, allLicenses, setCurrentLicenses, resetLicense])
 
   const handleIdSearch = () => {
     if (!idInput.trim()) {
@@ -51,14 +67,22 @@ export default function Reception() {
         message.error("未找到该身份证号对应的信息")
       }
       setIdSearchLoading(false)
-    }, 500)
+    }, 400)
   }
 
   const handleSelectMatter = (matter: typeof matters[0]) => {
     selectMatter(matter)
-    if (citizen) {
-      setCurrentLicenses(matter.requiredLicenses)
-    }
+  }
+
+  const handleRefresh = () => {
+    if (!selectedMatter || !citizen) return
+    const citizenLicenses = allLicenses.filter(
+      (l) => l.holderIdNumber === citizen.idNumber
+    )
+    const matterLicenseIds = selectedMatter.requiredLicenses
+    const matched = citizenLicenses.filter((l) => matterLicenseIds.includes(l.id))
+    setCurrentLicenses(matched.map((l) => l.id))
+    message.success("证照状态已刷新")
   }
 
   const handleStartVerify = (licenseId: string) => {
@@ -67,15 +91,42 @@ export default function Reception() {
 
   const handlePrintNotice = () => {
     if (!selectedMatter || !citizen) return
-    message.info("一次性告知单已发送至打印队列")
+    const record: AuditRecord = {
+      id: `A${Date.now()}`,
+      licenseId: "MULTI",
+      licenseName: "告知单打印",
+      matterId: selectedMatter.id,
+      matterName: selectedMatter.name,
+      windowNo: "窗口1",
+      operatorId: "OP001",
+      operatorName: "王丽娟",
+      citizenId: citizen.idNumber,
+      citizenName: citizen.name,
+      callReason: { category: "material_verification", description: "打印一次性告知单" },
+      verificationResult: {
+        licenseId: "MULTI",
+        expiryCheck: "valid",
+        authorityCheck: "consistent",
+        statusCheck: "normal",
+        fieldComparison: [],
+        duplicateWarning: false,
+        missingLicenses: missingLicenseIds,
+      },
+      signatureDataUrl: "",
+      action: "download",
+      createdAt: dayjs().format("YYYY-MM-DD HH:mm:ss"),
+    }
+    addAuditRecord(record)
+    message.info("一次性告知单已发送至打印队列，操作已留痕")
   }
 
-  const availableLicenses = useLicenseStore((s) => s.currentLicenses)
   const missingLicenseIds = selectedMatter
     ? selectedMatter.requiredLicenses.filter(
-        (id) => !availableLicenses.find((l) => l.id === id)
+        (id) => !currentLicenses.find((l) => l.id === id)
       )
     : []
+
+  const showLicenseList = selectedMatter && citizen
 
   return (
     <div className="space-y-5">
@@ -86,6 +137,11 @@ export default function Reception() {
               <div className="flex items-center gap-2 text-[#1B3A5C]">
                 <Search size={16} />
                 <span>事项选择</span>
+                {selectedMatter && (
+                  <Tag color="blue" className="ml-auto text-xs">
+                    已选事项
+                  </Tag>
+                )}
               </div>
             }
             className="shadow-sm"
@@ -146,6 +202,11 @@ export default function Reception() {
               <div className="flex items-center gap-2 text-[#1B3A5C]">
                 <User size={16} />
                 <span>身份识别</span>
+                {citizen && (
+                  <Tag color="green" className="ml-auto text-xs">
+                    已识别
+                  </Tag>
+                )}
               </div>
             }
             className="shadow-sm"
@@ -188,7 +249,7 @@ export default function Reception() {
             )}
           </Card>
 
-          {selectedMatter && citizen && (
+          {showLicenseList && (
             <>
               <Card
                 title={
@@ -198,6 +259,9 @@ export default function Reception() {
                     <Tag color="blue" className="ml-2">
                       {selectedMatter.name}
                     </Tag>
+                    <Tag color="green" className="ml-1">
+                      {citizen.name}
+                    </Tag>
                   </div>
                 }
                 extra={
@@ -205,7 +269,7 @@ export default function Reception() {
                     <Button
                       icon={<RefreshCw size={14} />}
                       size="small"
-                      onClick={() => setCurrentLicenses(selectedMatter.requiredLicenses)}
+                      onClick={handleRefresh}
                     >
                       刷新状态
                     </Button>
@@ -221,16 +285,24 @@ export default function Reception() {
                 className="shadow-sm"
                 styles={{ body: { padding: "12px 16px" } }}
               >
-                <div className="space-y-3">
-                  {availableLicenses.map((license) => (
-                    <LicenseCard
-                      key={license.id}
-                      license={license}
-                      onVerify={() => handleStartVerify(license.id)}
-                      compact
-                    />
-                  ))}
-                </div>
+                {currentLicenses.length > 0 ? (
+                  <div className="space-y-3">
+                    {currentLicenses.map((license) => (
+                      <LicenseCard
+                        key={license.id}
+                        license={license}
+                        onVerify={() => handleStartVerify(license.id)}
+                        compact
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <Empty
+                    description="该群众未持有本事项所需的任何电子证照"
+                    image={Empty.PRESENTED_IMAGE_SIMPLE}
+                    className="py-6"
+                  />
+                )}
 
                 {missingLicenseIds.length > 0 && (
                   <>
@@ -240,7 +312,7 @@ export default function Reception() {
                         ⚠ 缺失证照 - 以下证照群众未持有，需补充提交
                       </div>
                       <div className="text-sm text-red-600">
-                        缺失证照编号：{missingLicenseIds.join("、")}
+                        共 {missingLicenseIds.length} 项缺失：{missingLicenseIds.join("、")}
                       </div>
                       <Button
                         size="small"
@@ -259,13 +331,21 @@ export default function Reception() {
             </>
           )}
 
-          {!selectedMatter && !citizen && (
+          {!showLicenseList && (
             <Card className="shadow-sm" styles={{ body: { padding: "60px 20px" } }}>
               <Empty
                 description={
                   <div className="text-gray-400">
-                    <div className="text-base mb-1">请先选择办理事项</div>
-                    <div className="text-sm">然后输入群众身份证号查询可调用证照</div>
+                    <div className="text-base mb-1">
+                      {selectedMatter
+                        ? "请输入群众身份证号查询"
+                        : citizen
+                        ? "请先选择办理事项"
+                        : "请选择办理事项并输入身份证号"}
+                    </div>
+                    <div className="text-sm">
+                      事项和群众都确定后，自动列出可调用的电子证照清单
+                    </div>
                   </div>
                 }
                 image={Empty.PRESENTED_IMAGE_SIMPLE}

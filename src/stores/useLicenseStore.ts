@@ -51,7 +51,7 @@ export const useLicenseStore = create<LicenseState>((set, get) => ({
 
     const fieldComparison: FieldComparison[] = license.fields.map((f) => ({
       formField: f.matchFormFieldName,
-      formValue: f.matchResult === "mismatch" ? "（申请表填写值）" : f.fieldValue,
+      formValue: f.formValue,
       licenseField: f.fieldName,
       licenseValue: f.fieldValue,
       result: f.matchResult,

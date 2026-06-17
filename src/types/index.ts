@@ -19,6 +19,7 @@ export interface LicenseField {
   fieldName: string
   fieldValue: string
   matchFormFieldName: string
+  formValue: string
   matchResult: "match" | "mismatch" | "missing"
 }
 

@@ -1,9 +1,10 @@
-import { useState } from "react"
-import { Card, Table, Tag, Button, Input, DatePicker, Select, Modal, Descriptions, Image, message } from "antd"
+import { useState, useMemo } from "react"
+import { Card, Table, Tag, Button, Input, DatePicker, Select, Modal, Descriptions, message } from "antd"
+import type { Dayjs } from "dayjs"
 import {
   FileText,
   Search,
-  Filter,
+  RotateCcw,
   Download,
   Eye,
   FileDown,
@@ -26,36 +27,112 @@ const reasonCategoryMap: Record<string, string> = {
   information_comparison: "信息比对",
 }
 
+const expiryMap: Record<string, string> = {
+  valid: "有效",
+  expiring_soon: "即将到期",
+  expired: "已过期",
+}
+
 export default function Audit() {
-  const { records } = useAuditStore()
+  const { records, addRecord } = useAuditStore()
   const [searchText, setSearchText] = useState("")
   const [windowFilter, setWindowFilter] = useState<string>("")
   const [actionFilter, setActionFilter] = useState<string>("")
+  const [dateRange, setDateRange] = useState<[Dayjs | null, Dayjs | null] | null>(null)
   const [detailRecord, setDetailRecord] = useState<AuditRecord | null>(null)
   const [detailVisible, setDetailVisible] = useState(false)
 
-  const windows = [...new Set(records.map((r) => r.windowNo))]
+  const windows = useMemo(() => [...new Set(records.map((r) => r.windowNo))], [records])
 
-  const filteredRecords = records.filter((r) => {
-    const matchSearch =
-      !searchText ||
-      r.licenseName.includes(searchText) ||
-      r.matterName.includes(searchText) ||
-      r.operatorName.includes(searchText) ||
-      r.citizenName.includes(searchText)
-    const matchWindow = !windowFilter || r.windowNo === windowFilter
-    const matchAction = !actionFilter || r.action === actionFilter
-    return matchSearch && matchWindow && matchAction
-  })
+  const filteredRecords = useMemo(() => {
+    return records.filter((r) => {
+      const matchSearch =
+        !searchText ||
+        r.licenseName.includes(searchText) ||
+        r.matterName.includes(searchText) ||
+        r.operatorName.includes(searchText) ||
+        r.citizenName.includes(searchText)
+      const matchWindow = !windowFilter || r.windowNo === windowFilter
+      const matchAction = !actionFilter || r.action === actionFilter
+      let matchDate = true
+      if (dateRange && dateRange[0] && dateRange[1]) {
+        const recordDate = dayjs(r.createdAt)
+        matchDate =
+          recordDate.isAfter(dateRange[0].startOf("day")) &&
+          recordDate.isBefore(dateRange[1].endOf("day"))
+      }
+      return matchSearch && matchWindow && matchAction && matchDate
+    })
+  }, [records, searchText, windowFilter, actionFilter, dateRange])
+
+  const addAuditRecord = (record: AuditRecord, actionType: "view" | "download", desc: string) => {
+    addRecord({
+      id: `A${Date.now()}`,
+      licenseId: record.licenseId,
+      licenseName: record.licenseName,
+      matterId: record.matterId,
+      matterName: record.matterName,
+      windowNo: "窗口1",
+      operatorId: "OP001",
+      operatorName: "王丽娟",
+      citizenId: record.citizenId,
+      citizenName: record.citizenName,
+      callReason: { category: "material_verification", description: desc },
+      verificationResult: record.verificationResult,
+      signatureDataUrl: "",
+      action: actionType,
+      createdAt: dayjs().format("YYYY-MM-DD HH:mm:ss"),
+    })
+  }
 
   const handleViewDetail = (record: AuditRecord) => {
     setDetailRecord(record)
     setDetailVisible(true)
-    message.info("查看详情已自动留痕")
+    addAuditRecord(record, "view", `查看${record.licenseName}详情`)
+    message.success("查看详情已自动留痕")
   }
 
   const handleDownload = (record: AuditRecord) => {
-    message.success(`下载 ${record.licenseName} 已自动留痕`)
+    addAuditRecord(record, "download", `下载${record.licenseName}电子件`)
+    message.success(`下载 ${record.licenseName}，已自动留痕`)
+  }
+
+  const handleExport = () => {
+    const rec: AuditRecord = {
+      id: `A${Date.now()}`,
+      licenseId: "EXPORT",
+      licenseName: "记录导出",
+      matterId: "ALL",
+      matterName: "全量统计",
+      windowNo: "窗口1",
+      operatorId: "OP001",
+      operatorName: "王丽娟",
+      citizenId: "SYSTEM",
+      citizenName: "系统操作",
+      callReason: { category: "information_comparison", description: "导出调用留痕记录" },
+      verificationResult: {
+        licenseId: "EXPORT",
+        expiryCheck: "valid",
+        authorityCheck: "consistent",
+        statusCheck: "normal",
+        fieldComparison: [],
+        duplicateWarning: false,
+        missingLicenses: [],
+      },
+      signatureDataUrl: "",
+      action: "download",
+      createdAt: dayjs().format("YYYY-MM-DD HH:mm:ss"),
+    }
+    addRecord(rec)
+    message.success("导出功能已触发，操作已留痕")
+  }
+
+  const handleReset = () => {
+    setSearchText("")
+    setWindowFilter("")
+    setActionFilter("")
+    setDateRange(null)
+    message.info("筛选条件已重置")
   }
 
   const columns = [
@@ -71,7 +148,7 @@ export default function Audit() {
       title: "窗口",
       dataIndex: "windowNo",
       key: "windowNo",
-      width: "8%",
+      width: "7%",
     },
     {
       title: "操作人",
@@ -80,7 +157,7 @@ export default function Audit() {
       width: "8%",
     },
     {
-      title: "事项",
+      title: "办理事项",
       dataIndex: "matterName",
       key: "matterName",
       width: "16%",
@@ -96,16 +173,18 @@ export default function Audit() {
       title: "群众",
       dataIndex: "citizenName",
       key: "citizenName",
-      width: "8%",
+      width: "7%",
     },
     {
       title: "调用原因",
       dataIndex: "callReason",
       key: "callReason",
-      width: "14%",
+      width: "18%",
       render: (reason: AuditRecord["callReason"]) => (
         <span>
-          <Tag color="blue" className="mr-1">{reasonCategoryMap[reason.category]}</Tag>
+          <Tag color="blue" className="mr-1">
+            {reasonCategoryMap[reason.category]}
+          </Tag>
           <span className="text-xs text-gray-500">{reason.description}</span>
         </span>
       ),
@@ -114,7 +193,7 @@ export default function Audit() {
       title: "操作类型",
       dataIndex: "action",
       key: "action",
-      width: "8%",
+      width: "7%",
       render: (action: string) => {
         const cfg = actionMap[action] || { color: "default", text: action }
         return <Tag color={cfg.color}>{cfg.text}</Tag>
@@ -123,7 +202,7 @@ export default function Audit() {
     {
       title: "操作",
       key: "actions",
-      width: "10%",
+      width: "9%",
       render: (_: unknown, record: AuditRecord) => (
         <div className="flex gap-1">
           <Button
@@ -156,7 +235,7 @@ export default function Audit() {
       </div>
 
       <Card className="shadow-sm" styles={{ body: { padding: "12px 16px" } }}>
-        <div className="flex items-center gap-4 flex-wrap">
+        <div className="flex items-center gap-3 flex-wrap">
           <Input
             placeholder="搜索证照、事项、操作人、群众..."
             value={searchText}
@@ -170,7 +249,7 @@ export default function Audit() {
             value={windowFilter || undefined}
             onChange={(v) => setWindowFilter(v || "")}
             allowClear
-            className="w-32"
+            className="w-28"
             options={windows.map((w) => ({ value: w, label: w }))}
           />
           <Select
@@ -178,20 +257,24 @@ export default function Audit() {
             value={actionFilter || undefined}
             onChange={(v) => setActionFilter(v || "")}
             allowClear
-            className="w-32"
+            className="w-28"
             options={[
               { value: "call", label: "调用" },
               { value: "view", label: "查看" },
               { value: "download", label: "下载" },
             ]}
           />
-          <RangePicker className="w-64" />
-          <Button icon={<Filter size={14} />}>重置</Button>
+          <RangePicker
+            value={dateRange}
+            onChange={(val) => setDateRange(val as [Dayjs | null, Dayjs | null] | null)}
+            className="w-60"
+            allowClear
+          />
+          <Button icon={<RotateCcw size={14} />} onClick={handleReset}>
+            重置
+          </Button>
           <div className="ml-auto">
-            <Button
-              icon={<Download size={14} />}
-              onClick={() => message.info("导出功能已触发，自动留痕")}
-            >
+            <Button icon={<Download size={14} />} onClick={handleExport}>
               导出记录
             </Button>
           </div>
@@ -202,7 +285,11 @@ export default function Audit() {
         <Table
           dataSource={filteredRecords}
           columns={columns}
-          pagination={{ pageSize: 10, showSizeChanger: true, showTotal: (total) => `共 ${total} 条` }}
+          pagination={{
+            pageSize: 10,
+            showSizeChanger: true,
+            showTotal: (total) => `共 ${total} 条`,
+          }}
           size="small"
           rowKey="id"
         />
@@ -218,27 +305,41 @@ export default function Audit() {
         open={detailVisible}
         onCancel={() => setDetailVisible(false)}
         footer={null}
-        width={700}
+        width={760}
       >
         {detailRecord && (
           <div className="space-y-4">
             <Descriptions column={2} size="small" bordered>
-              <Descriptions.Item label="调用时间">{detailRecord.createdAt}</Descriptions.Item>
+              <Descriptions.Item label="调用时间">
+                {detailRecord.createdAt}
+              </Descriptions.Item>
               <Descriptions.Item label="窗口">{detailRecord.windowNo}</Descriptions.Item>
-              <Descriptions.Item label="操作人">{detailRecord.operatorName}</Descriptions.Item>
+              <Descriptions.Item label="操作人">
+                {detailRecord.operatorName}
+              </Descriptions.Item>
               <Descriptions.Item label="操作类型">
                 <Tag color={actionMap[detailRecord.action]?.color}>
                   {actionMap[detailRecord.action]?.text}
                 </Tag>
               </Descriptions.Item>
-              <Descriptions.Item label="办理事项" span={2}>{detailRecord.matterName}</Descriptions.Item>
-              <Descriptions.Item label="调用证照" span={2}>{detailRecord.licenseName}</Descriptions.Item>
-              <Descriptions.Item label="群众姓名">{detailRecord.citizenName}</Descriptions.Item>
-              <Descriptions.Item label="身份证号">{detailRecord.citizenId}</Descriptions.Item>
+              <Descriptions.Item label="办理事项" span={2}>
+                {detailRecord.matterName}
+              </Descriptions.Item>
+              <Descriptions.Item label="调用证照" span={2}>
+                {detailRecord.licenseName}
+              </Descriptions.Item>
+              <Descriptions.Item label="群众姓名">
+                {detailRecord.citizenName}
+              </Descriptions.Item>
+              <Descriptions.Item label="身份证号">
+                {detailRecord.citizenId}
+              </Descriptions.Item>
               <Descriptions.Item label="调用原因类别">
                 {reasonCategoryMap[detailRecord.callReason.category]}
               </Descriptions.Item>
-              <Descriptions.Item label="调用说明">{detailRecord.callReason.description}</Descriptions.Item>
+              <Descriptions.Item label="调用说明">
+                {detailRecord.callReason.description}
+              </Descriptions.Item>
             </Descriptions>
 
             {detailRecord.verificationResult && (
@@ -247,43 +348,92 @@ export default function Audit() {
                 <div className="grid grid-cols-3 gap-3">
                   <div className="text-center p-2 bg-gray-50 rounded">
                     <div className="text-xs text-gray-400">有效期</div>
-                    <div className={`font-bold ${
-                      detailRecord.verificationResult.expiryCheck === "valid" ? "text-green-600" :
-                      detailRecord.verificationResult.expiryCheck === "expiring_soon" ? "text-orange-500" : "text-red-500"
-                    }`}>
-                      {detailRecord.verificationResult.expiryCheck === "valid" ? "有效" :
-                       detailRecord.verificationResult.expiryCheck === "expiring_soon" ? "即将到期" : "已过期"}
+                    <div
+                      className={`font-bold ${
+                        detailRecord.verificationResult.expiryCheck === "valid"
+                          ? "text-green-600"
+                          : detailRecord.verificationResult.expiryCheck === "expiring_soon"
+                          ? "text-orange-500"
+                          : "text-red-500"
+                      }`}
+                    >
+                      {expiryMap[detailRecord.verificationResult.expiryCheck]}
                     </div>
                   </div>
                   <div className="text-center p-2 bg-gray-50 rounded">
                     <div className="text-xs text-gray-400">签发机关</div>
-                    <div className={`font-bold ${
-                      detailRecord.verificationResult.authorityCheck === "consistent" ? "text-green-600" : "text-red-500"
-                    }`}>
-                      {detailRecord.verificationResult.authorityCheck === "consistent" ? "一致" : "不一致"}
+                    <div
+                      className={`font-bold ${
+                        detailRecord.verificationResult.authorityCheck === "consistent"
+                          ? "text-green-600"
+                          : "text-red-500"
+                      }`}
+                    >
+                      {detailRecord.verificationResult.authorityCheck === "consistent"
+                        ? "一致"
+                        : "不一致"}
                     </div>
                   </div>
                   <div className="text-center p-2 bg-gray-50 rounded">
                     <div className="text-xs text-gray-400">证照状态</div>
-                    <div className={`font-bold ${
-                      detailRecord.verificationResult.statusCheck === "normal" ? "text-green-600" : "text-red-500"
-                    }`}>
-                      {detailRecord.verificationResult.statusCheck === "normal" ? "正常" : "异常"}
+                    <div
+                      className={`font-bold ${
+                        detailRecord.verificationResult.statusCheck === "normal"
+                          ? "text-green-600"
+                          : "text-red-500"
+                      }`}
+                    >
+                      {detailRecord.verificationResult.statusCheck === "normal"
+                        ? "正常"
+                        : "异常"}
                     </div>
                   </div>
                 </div>
+
+                {detailRecord.verificationResult.fieldComparison.length > 0 && (
+                  <div className="mt-3">
+                    <div className="text-sm font-medium text-gray-700 mb-2">字段比对详情</div>
+                    <div className="border rounded text-sm">
+                      <div className="grid grid-cols-5 bg-gray-50 px-3 py-2 font-medium text-gray-500 text-xs">
+                        <div>申请表字段</div>
+                        <div>申请表值</div>
+                        <div>证照字段</div>
+                        <div>证照值</div>
+                        <div>结果</div>
+                      </div>
+                      {detailRecord.verificationResult.fieldComparison.map((f, idx) => (
+                        <div
+                          key={idx}
+                          className={`grid grid-cols-5 px-3 py-2 border-t ${
+                            f.result !== "match" ? "bg-red-50" : ""
+                          }`}
+                        >
+                          <div className="text-gray-600">{f.formField}</div>
+                          <div>{f.formValue}</div>
+                          <div className="text-gray-600">{f.licenseField}</div>
+                          <div>{f.licenseValue}</div>
+                          <div>
+                            <Tag
+                              color={f.result === "match" ? "green" : f.result === "mismatch" ? "red" : "orange"}
+                            >
+                              {f.result === "match" ? "一致" : f.result === "mismatch" ? "不一致" : "缺失"}
+                            </Tag>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
             {detailRecord.signatureDataUrl && (
               <div>
                 <div className="text-sm font-medium text-gray-700 mb-2">群众签字</div>
-                <Image
+                <img
                   src={detailRecord.signatureDataUrl}
                   alt="签字图片"
-                  width={300}
-                  height={100}
-                  className="border rounded"
+                  style={{ width: 300, height: 100, border: "1px solid #e5e7eb", borderRadius: 4 }}
                 />
               </div>
             )}

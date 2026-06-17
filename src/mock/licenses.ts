@@ -15,9 +15,9 @@ export const licenses: License[] = [
     imageUrl: "",
     callStatus: "available",
     fields: [
-      { fieldName: "姓名", fieldValue: "张明华", matchFormFieldName: "申请人姓名", matchResult: "match" },
-      { fieldName: "公民身份号码", fieldValue: "110101199001011234", matchFormFieldName: "证件号码", matchResult: "match" },
-      { fieldName: "住址", fieldValue: "北京市东城区建国门大街15号", matchFormFieldName: "通讯地址", matchResult: "match" },
+      { fieldName: "姓名", fieldValue: "张明华", matchFormFieldName: "申请人姓名", formValue: "张明华", matchResult: "match" },
+      { fieldName: "公民身份号码", fieldValue: "110101199001011234", matchFormFieldName: "证件号码", formValue: "110101199001011234", matchResult: "match" },
+      { fieldName: "住址", fieldValue: "北京市东城区建国门大街15号", matchFormFieldName: "通讯地址", formValue: "北京市东城区建国门大街15号", matchResult: "match" },
     ],
   },
   {
@@ -34,9 +34,9 @@ export const licenses: License[] = [
     imageUrl: "",
     callStatus: "available",
     fields: [
-      { fieldName: "法定代表人", fieldValue: "张明华", matchFormFieldName: "负责人姓名", matchResult: "match" },
-      { fieldName: "统一社会信用代码", fieldValue: "91110101MA01AB2C3D", matchFormFieldName: "信用代码", matchResult: "match" },
-      { fieldName: "经营范围", fieldValue: "餐饮服务", matchFormFieldName: "申请经营范围", matchResult: "mismatch" },
+      { fieldName: "法定代表人", fieldValue: "张明华", matchFormFieldName: "负责人姓名", formValue: "张明华", matchResult: "match" },
+      { fieldName: "统一社会信用代码", fieldValue: "91110101MA01AB2C3D", matchFormFieldName: "信用代码", formValue: "91110101MA01AB2C3D", matchResult: "match" },
+      { fieldName: "经营范围", fieldValue: "餐饮服务", matchFormFieldName: "申请经营范围", formValue: "食品销售", matchResult: "mismatch" },
     ],
   },
   {
@@ -53,9 +53,9 @@ export const licenses: License[] = [
     imageUrl: "",
     callStatus: "need_auth",
     fields: [
-      { fieldName: "权利人", fieldValue: "张明华", matchFormFieldName: "产权人姓名", matchResult: "match" },
-      { fieldName: "坐落", fieldValue: "东城区建国门大街15号2单元301", matchFormFieldName: "房产地址", matchResult: "match" },
-      { fieldName: "面积", fieldValue: "89.5㎡", matchFormFieldName: "建筑面积", matchResult: "match" },
+      { fieldName: "权利人", fieldValue: "张明华", matchFormFieldName: "产权人姓名", formValue: "张明华", matchResult: "match" },
+      { fieldName: "坐落", fieldValue: "东城区建国门大街15号2单元301", matchFormFieldName: "房产地址", formValue: "东城区建国门大街15号2单元301", matchResult: "match" },
+      { fieldName: "面积", fieldValue: "89.5㎡", matchFormFieldName: "建筑面积", formValue: "89.5㎡", matchResult: "match" },
     ],
   },
   {
@@ -72,8 +72,8 @@ export const licenses: License[] = [
     imageUrl: "",
     callStatus: "available",
     fields: [
-      { fieldName: "持证人", fieldValue: "张明华", matchFormFieldName: "申请人姓名", matchResult: "match" },
-      { fieldName: "登记日期", fieldValue: "2020-05-20", matchFormFieldName: "婚姻登记日期", matchResult: "match" },
+      { fieldName: "持证人", fieldValue: "张明华", matchFormFieldName: "申请人姓名", formValue: "张明华", matchResult: "match" },
+      { fieldName: "登记日期", fieldValue: "2020-05-20", matchFormFieldName: "婚姻登记日期", formValue: "2020-05-20", matchResult: "match" },
     ],
   },
   {
@@ -90,8 +90,8 @@ export const licenses: License[] = [
     imageUrl: "",
     callStatus: "available",
     fields: [
-      { fieldName: "经营者", fieldValue: "张明华", matchFormFieldName: "负责人姓名", matchResult: "match" },
-      { fieldName: "主体业态", fieldValue: "餐饮服务经营者", matchFormFieldName: "经营类型", matchResult: "match" },
+      { fieldName: "经营者", fieldValue: "张明华", matchFormFieldName: "负责人姓名", formValue: "张明华", matchResult: "match" },
+      { fieldName: "主体业态", fieldValue: "餐饮服务经营者", matchFormFieldName: "经营类型", formValue: "餐饮服务经营者", matchResult: "match" },
     ],
   },
   {
@@ -108,9 +108,9 @@ export const licenses: License[] = [
     imageUrl: "",
     callStatus: "available",
     fields: [
-      { fieldName: "新生儿姓名", fieldValue: "张子涵", matchFormFieldName: "申请人姓名", matchResult: "match" },
-      { fieldName: "母亲姓名", fieldValue: "李秀英", matchFormFieldName: "母亲姓名", matchResult: "match" },
-      { fieldName: "父亲姓名", fieldValue: "张明华", matchFormFieldName: "父亲姓名", matchResult: "match" },
+      { fieldName: "新生儿姓名", fieldValue: "张子涵", matchFormFieldName: "申请人姓名", formValue: "张子涵", matchResult: "match" },
+      { fieldName: "母亲姓名", fieldValue: "李秀英", matchFormFieldName: "母亲姓名", formValue: "李秀英", matchResult: "match" },
+      { fieldName: "父亲姓名", fieldValue: "张明华", matchFormFieldName: "父亲姓名", formValue: "张明华", matchResult: "match" },
     ],
   },
   {
@@ -127,8 +127,8 @@ export const licenses: License[] = [
     imageUrl: "",
     callStatus: "available",
     fields: [
-      { fieldName: "参保人", fieldValue: "张明华", matchFormFieldName: "申请人姓名", matchResult: "match" },
-      { fieldName: "参保状态", fieldValue: "正常缴费", matchFormFieldName: "社保状态", matchResult: "mismatch" },
+      { fieldName: "参保人", fieldValue: "张明华", matchFormFieldName: "申请人姓名", formValue: "张明华", matchResult: "match" },
+      { fieldName: "参保状态", fieldValue: "正常缴费", matchFormFieldName: "社保状态", formValue: "暂停缴费", matchResult: "mismatch" },
     ],
   },
   {
@@ -145,8 +145,8 @@ export const licenses: License[] = [
     imageUrl: "",
     callStatus: "unavailable",
     fields: [
-      { fieldName: "持证人", fieldValue: "张明华", matchFormFieldName: "申请人姓名", matchResult: "match" },
-      { fieldName: "有效期至", fieldValue: "2025-03-01", matchFormFieldName: "证件有效期", matchResult: "mismatch" },
+      { fieldName: "持证人", fieldValue: "张明华", matchFormFieldName: "申请人姓名", formValue: "张明华", matchResult: "match" },
+      { fieldName: "有效期至", fieldValue: "2025-03-01", matchFormFieldName: "证件有效期", formValue: "2026-03-01", matchResult: "mismatch" },
     ],
   },
   {
@@ -163,8 +163,8 @@ export const licenses: License[] = [
     imageUrl: "",
     callStatus: "need_auth",
     fields: [
-      { fieldName: "申请人", fieldValue: "张明华", matchFormFieldName: "申请人姓名", matchResult: "match" },
-      { fieldName: "家庭月收入", fieldValue: "2800元", matchFormFieldName: "月收入", matchResult: "match" },
+      { fieldName: "申请人", fieldValue: "张明华", matchFormFieldName: "申请人姓名", formValue: "张明华", matchResult: "match" },
+      { fieldName: "家庭月收入", fieldValue: "2800元", matchFormFieldName: "月收入", formValue: "2800元", matchResult: "match" },
     ],
   },
 ]
