@@ -1,0 +1,68 @@
+import type { Matter } from "@/types"
+
+export const matters: Matter[] = [
+  {
+    id: "M001",
+    name: "个体工商户设立登记",
+    department: "市场监管局",
+    category: "市场准入",
+    requiredLicenses: ["L001", "L002", "L005"],
+    description: "申请设立个体工商户，需提供身份证、营业执照等证照",
+  },
+  {
+    id: "M002",
+    name: "住房公积金提取",
+    department: "住房公积金中心",
+    category: "住房保障",
+    requiredLicenses: ["L001", "L003"],
+    description: "申请提取住房公积金，需核验身份及房产信息",
+  },
+  {
+    id: "M003",
+    name: "出生医学证明办理",
+    department: "卫生健康委",
+    category: "民生服务",
+    requiredLicenses: ["L001", "L006"],
+    description: "办理新生儿出生医学证明，需核验父母身份及结婚证",
+  },
+  {
+    id: "M004",
+    name: "不动产登记",
+    department: "自然资源局",
+    category: "产权登记",
+    requiredLicenses: ["L001", "L003", "L004"],
+    description: "申请不动产登记，需核验身份、婚姻及房产信息",
+  },
+  {
+    id: "M005",
+    name: "社保卡申领",
+    department: "人社局",
+    category: "社会保障",
+    requiredLicenses: ["L001", "L007"],
+    description: "申领社会保障卡，需核验身份及社保缴纳信息",
+  },
+  {
+    id: "M006",
+    name: "公共场所卫生许可",
+    department: "卫生健康委",
+    category: "市场准入",
+    requiredLicenses: ["L001", "L002", "L008"],
+    description: "申请公共场所卫生许可证，需核验营业执照及健康证明",
+  },
+  {
+    id: "M007",
+    name: "房屋租赁备案",
+    department: "住建局",
+    category: "住房保障",
+    requiredLicenses: ["L001", "L003"],
+    description: "房屋租赁合同备案登记，需核验身份及房产信息",
+  },
+  {
+    id: "M008",
+    name: "低保证明办理",
+    department: "民政局",
+    category: "社会救助",
+    requiredLicenses: ["L001", "L009"],
+    description: "申请最低生活保障，需核验身份及收入证明",
+  },
+]
